@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              Int @id @default(autoincrement())
+  email           String @unique
+  password        String
+  role            Role @default(USER) 
+  balance         Int @default(0)
+  lockedBalance   Int @default(0)
+  createdMarkets  Market[]     @relation("MarketCreator")
+  orders          Order[]
+  positions       Position[]
+  onRamp          OnRamp[]
+}
+
+model Market {
+  id            Int @id @default(autoincrement())
+  question      String
+  description   String
+  closesAt      DateTime
+  status        MarketStatus @default(OPEN)
+  result        Side?
+
+  creatorId     Int
+  creator       User @relation("MarketCreator", fields: [creatorId], references: [id])
+  resolvedById  Int?
+
+  orders        Order[]
+  trades        Trade[]
+  positions     Position[]
+
+  @@index([status, closesAt])
+}
+
+model Order {
+  id            Int @id @default(autoincrement())
+  side          Side
+  action        Action  @default(BUY)
+  price         Int
+  qty           Int
+  filledQty     Int @default(0)
+  status        OrderStatus @default(OPEN)
+  createdAt     DateTime @default(now())
+
+  userId   Int
+  user     User   @relation(fields: [userId], references: [id])
+  marketId Int
+  market   Market @relation(fields: [marketId], references: [id])
+
+  takerTrades Trade[] @relation("TakerOrder")
+  makerTrades Trade[] @relation("MakerOrder")
+
+  @@index([marketId, status])
+  @@index([userId, status])
+}
+
+model Trade {
+  id         Int      @id @default(autoincrement())
+  price      Int
+  qty        Int
+  createdAt  DateTime @default(now())
+  type TradeType @default(MINT)
+
+  marketId     Int
+  market       Market @relation(fields: [marketId], references: [id])
+  takerOrderId Int
+  takerOrder   Order  @relation("TakerOrder", fields: [takerOrderId], references: [id])
+  makerOrderId Int
+  makerOrder   Order  @relation("MakerOrder", fields: [makerOrderId], references: [id])
+
+  @@index([marketId, createdAt])
+}
+
+
+model Position {
+  id       Int    @id @default(autoincrement())
+  yesQty   Int    @default(0)
+  noQty    Int    @default(0)
+
+  userId   Int
+  user     User   @relation(fields: [userId], references: [id])
+  marketId Int
+  market   Market @relation(fields: [marketId], references: [id])
+
+  lockedYesQty Int @default(0)
+  lockedNoQty  Int @default(0)
+
+  @@unique([userId, marketId])
+}
+
+model VerificationCode {
+  id          String @id @default(cuid())
+  type        OtpType
+  email       String
+  code        String
+  verified    Boolean @default(false)
+  attempts    Int @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model OnRamp {
+  id       Int    @id @default(autoincrement())
+  type     TxType
+  amount   Int
+  userId   Int
+  user     User @relation(fields: [userId], references: [id])
+}
+
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Side {
+  YES
+  NO
+}
+
+enum Action {
+  BUY
+  SELL
+}
+
+enum MarketStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+}
+
+enum OrderStatus {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
+}
+
+enum TxType {
+  BONUS
+  ORDER_LOCK
+  REFUND
+  PAYOUT
+}
+
+enum TradeType {
+  MINT  
+  TRANSFER
+  BURN
+}
+
+enum OtpType {
+  REGISTER
+  RESET
+}
